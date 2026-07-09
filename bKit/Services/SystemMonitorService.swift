@@ -96,6 +96,8 @@ private final class SMCReader {
         "Tp01", "Tp05", "Tp09", "Tp0D", "Tp0V", "Tp0Y", "Tp0b", "Tp0e",
         "mTPL", "TC0P", "TC0E", "TC0F"
     ]
+    private var activeTemperatureKeys: [String] = []
+    private var hasProbedTemperatureKeys = false
     private let debugEnabled = ProcessInfo.processInfo.environment["BKIT_SMC_DEBUG"] == "1"
 
     private var connection: io_connect_t = 0
@@ -104,24 +106,27 @@ private final class SMCReader {
         close()
     }
 
-    /// 读取当前 CPU 温度，优先命中本机 Apple Silicon 上可用的温度 key。
+    /// 读取当前 CPU 温度，仅高频读取有效的候选 Key。
     func currentTemperatureCelsius() -> Double? {
         guard open() else { return nil }
         var values: [Double] = []
 
-        for key in temperatureKeys {
-            guard let temperature = readNumericValue(for: key) else {
-                debugLog("temperature key=\(key) read failed")
-                continue
+        if !hasProbedTemperatureKeys {
+            for key in temperatureKeys {
+                if let temperature = readNumericValue(for: key), temperature >= 10, temperature <= 120 {
+                    activeTemperatureKeys.append(key)
+                    values.append(temperature)
+                } else {
+                    debugLog("temperature key=\(key) read failed")
+                }
             }
-
-            guard temperature >= 10, temperature <= 120 else {
-                debugLog("temperature key=\(key) value=\(String(format: "%.2f", temperature)) filtered")
-                continue
+            hasProbedTemperatureKeys = true
+        } else {
+            for key in activeTemperatureKeys {
+                if let temperature = readNumericValue(for: key), temperature >= 10, temperature <= 120 {
+                    values.append(temperature)
+                }
             }
-
-            debugLog("temperature key=\(key) value=\(String(format: "%.2f", temperature))")
-            values.append(temperature)
         }
 
         guard !values.isEmpty else { return nil }
@@ -310,7 +315,6 @@ private final class SMCReader {
         ]
         return String(bytes: scalars, encoding: .macOSRoman) ?? ""
     }
-
     /// 展开固定 32 字节元组，统一给温度和风扇解析逻辑复用。
     private func bytesArray(from bytes: SMCBytes) -> [UInt8] {
         [
@@ -349,12 +353,36 @@ final class SystemMonitorService {
     private let smcReader = SMCReader()
     private let debugEnabled = ProcessInfo.processInfo.environment["BKIT_SMC_DEBUG"] == "1"
 
+    // 线程安全控制变量，指示主窗口是否展开
+    private let lock = NSLock()
+    private var _isPanelOpen = false
+    var isPanelOpen: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isPanelOpen
+        }
+        set {
+            lock.lock()
+            _isPanelOpen = newValue
+            lock.unlock()
+        }
+    }
+
+    // 降频与缓存指标
+    private var lastHardwareSampleTime: Date?
+    private var lastDiskSampleTime: Date?
+    private var cachedDiskSnapshot: (usedGB: Double, totalGB: Double)?
+    private var cachedTemperatureCelsius: Double?
+    private var cachedFanSpeedRPM: Double?
+
     func start() {
         stop()
         debugLog("service start")
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(1200))
+        // 统一所有底层刷新频率为 1.0 秒一次
+        timer.schedule(deadline: .now(), repeating: .seconds(1))
         timer.setEventHandler { [weak self] in
             self?.captureMetrics()
         }
@@ -375,22 +403,60 @@ final class SystemMonitorService {
         smoothedDownloadKBps = 0
     }
 
-    /// 汇总一次系统指标采集，采集失败的字段使用上一次或兜底值保持稳定输出。
+    /// 汇总一次系统指标采集。在主面板折叠隐藏时跳过大开销监控，对磁盘/温度风扇执行降频。
     private func captureMetrics() {
-        let cpuUsagePercent = currentCPUUsagePercent() ?? 0
-        let memorySnapshot = currentMemorySnapshot() ?? (usedGB: 0, totalGB: 0)
-        let diskSnapshot = currentDiskSnapshot() ?? (usedGB: 0, totalGB: 0)
-        let networkSnapshot = currentNetworkSpeedSnapshot() ?? (uploadKBps: 0, downloadKBps: 0)
-        let temperatureCelsius = bestEffortTemperatureCelsius()
-        let fanSpeedRPM = bestEffortFanSpeedRPM()
-        debugLog("capture cpu=\(String(format: "%.1f", cpuUsagePercent)) temp=\(temperatureCelsius.map { String(format: "%.2f", $0) } ?? "nil") fan=\(fanSpeedRPM.map { String(format: "%.0f", $0) } ?? "nil")")
+        let now = Date()
 
+        // 1. 网络速度：高频且极廉价的指标，每 1.0 秒获取
+        let networkSnapshot = currentNetworkSpeedSnapshot() ?? (uploadKBps: 0, downloadKBps: 0)
         let currentUploadKBps = smooth(current: networkSnapshot.uploadKBps, previous: smoothedUploadKBps)
         let currentDownloadKBps = smooth(current: networkSnapshot.downloadKBps, previous: smoothedDownloadKBps)
         smoothedUploadKBps = currentUploadKBps
         smoothedDownloadKBps = currentDownloadKBps
-
         appendHistory(uploadKBps: currentUploadKBps, downloadKBps: currentDownloadKBps)
+
+        // 2. 根据面板是否展开（isPanelOpen）来执行轻量级按需与降频采集
+        var cpuUsagePercent: Double = 0
+        var memorySnapshot: (usedGB: Double, totalGB: Double) = (usedGB: 0, totalGB: 0)
+        var diskSnapshot: (usedGB: Double, totalGB: Double) = (usedGB: 0, totalGB: 0)
+        var temperatureCelsius: Double? = nil
+        var fanSpeedRPM: Double? = nil
+
+        if isPanelOpen {
+            // CPU & 内存：高频，每秒刷新一次
+            cpuUsagePercent = currentCPUUsagePercent() ?? 0
+            memorySnapshot = currentMemorySnapshot() ?? (usedGB: 0, totalGB: 0)
+
+            // 磁盘占用率：低频，每 4.0 秒以上刷新一次
+            if let lastTime = lastDiskSampleTime, now.timeIntervalSince(lastTime) < 4.0, let cached = cachedDiskSnapshot {
+                diskSnapshot = cached
+            } else {
+                let sampled = currentDiskSnapshot() ?? (usedGB: 0, totalGB: 0)
+                cachedDiskSnapshot = sampled
+                diskSnapshot = sampled
+                lastDiskSampleTime = now
+            }
+
+            // SMC 温度 / 风扇：低频，每 6.0 秒以上刷新一次
+            if let lastTime = lastHardwareSampleTime, now.timeIntervalSince(lastTime) < 6.0 {
+                temperatureCelsius = cachedTemperatureCelsius
+                fanSpeedRPM = cachedFanSpeedRPM
+            } else {
+                let tempSample = bestEffortTemperatureCelsius()
+                let fanSample = bestEffortFanSpeedRPM()
+                cachedTemperatureCelsius = tempSample
+                cachedFanSpeedRPM = fanSample
+                temperatureCelsius = tempSample
+                fanSpeedRPM = fanSample
+                lastHardwareSampleTime = now
+            }
+        } else {
+            // 面板隐藏时：CPU、内存、磁盘和 SMC 硬件全部停止采集，极大限度节省 CPU 消耗
+            // 此时保留上一次的缓存值，避免切换面板时内容闪烁
+            diskSnapshot = cachedDiskSnapshot ?? (usedGB: 0, totalGB: 0)
+            temperatureCelsius = cachedTemperatureCelsius
+            fanSpeedRPM = cachedFanSpeedRPM
+        }
 
         let metrics = SystemMonitorMetrics(
             cpuUsagePercent: cpuUsagePercent,

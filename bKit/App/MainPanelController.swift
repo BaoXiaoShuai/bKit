@@ -17,6 +17,7 @@ final class MainPanelController: NSObject, NSPopoverDelegate {
     private var globalEventMonitor: Any?
     private var localEventMonitor: Any?
     private var resignActiveObserver: NSObjectProtocol?
+    private let systemMonitorPlugin: SystemMonitorPlugin
 
     init(
         statusItem: NSStatusItem,
@@ -28,6 +29,7 @@ final class MainPanelController: NSObject, NSPopoverDelegate {
         openClipboardHistory: @escaping () -> Void
     ) {
         self.statusItem = statusItem
+        self.systemMonitorPlugin = systemMonitorPlugin
         popover = NSPopover()
 
         super.init()
@@ -69,16 +71,25 @@ final class MainPanelController: NSObject, NSPopoverDelegate {
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
         installDismissMonitors()
         NSApp.activate(ignoringOtherApps: true)
+        
+        // 标记面板展开，激活后台系统级核心监控指标的采集
+        systemMonitorPlugin.isPanelOpen = true
     }
 
     /// 隐藏主面板。
     func hide() {
         removeDismissMonitors()
         popover.performClose(nil)
+        
+        // 标记面板隐藏，停止非必要的系统级监控采集
+        systemMonitorPlugin.isPanelOpen = false
     }
 
     func popoverDidClose(_ notification: Notification) {
         removeDismissMonitors()
+        
+        // 标记面板隐藏，停止非必要的系统级监控采集
+        systemMonitorPlugin.isPanelOpen = false
     }
 
     private func installDismissMonitors() {

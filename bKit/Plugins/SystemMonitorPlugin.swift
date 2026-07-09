@@ -45,6 +45,13 @@ final class SystemMonitorPlugin: BasePlugin {
     private let service: SystemMonitorService
     private let debugEnabled = ProcessInfo.processInfo.environment["BKIT_SMC_DEBUG"] == "1"
 
+    // 控制底层的按需刷新模式
+    var isPanelOpen: Bool = false {
+        didSet {
+            service.isPanelOpen = isPanelOpen
+        }
+    }
+
     init() {
         settings = SystemMonitorSettings()
         service = SystemMonitorService()
@@ -71,10 +78,10 @@ final class SystemMonitorPlugin: BasePlugin {
             status: .stopped
         )
 
-        // 统一把底层采集结果映射为插件快照，保持 UI 读取入口稳定。
+        // 统一把底层采集结果映射为插件快照，并在 Snapshot 有变化时防抖更新。
         service.onUpdate = { [weak self] metrics in
             guard let self else { return }
-            self.snapshot = SystemMonitorSnapshot(
+            let newSnapshot = SystemMonitorSnapshot(
                 cpuUsagePercent: metrics.cpuUsagePercent,
                 memoryUsedGB: metrics.memoryUsedGB,
                 memoryTotalGB: metrics.memoryTotalGB,
@@ -87,12 +94,17 @@ final class SystemMonitorPlugin: BasePlugin {
                 uploadHistoryKBps: metrics.uploadHistoryKBps,
                 downloadHistoryKBps: metrics.downloadHistoryKBps
             )
+            
+            if self.snapshot != newSnapshot {
+                self.snapshot = newSnapshot
+            }
         }
     }
 
     /// 启动系统监控采集服务，并持续刷新快照数据。
     override func start() {
         debugLog("plugin start")
+        service.isPanelOpen = isPanelOpen
         service.start()
         updateStatus(.running)
     }

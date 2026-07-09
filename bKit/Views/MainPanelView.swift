@@ -320,7 +320,16 @@ struct MainPanelView: View {
 
     private var clipboardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            moduleHeader(title: "剪切板")
+            moduleHeader(title: "剪切板") {
+                Button {
+                    openClipboardHistory()
+                } label: {
+                    Text("查看全部 >")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
 
             VStack(spacing: 0) {
                 if recentClipboardItems.isEmpty {
@@ -358,15 +367,6 @@ struct MainPanelView: View {
                     }
                 }
             }
-
-            Button {
-                openClipboardHistory()
-            } label: {
-                Text("查看全部 >")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.vertical, 20)
     }
@@ -613,7 +613,7 @@ struct MainPanelView: View {
         if value >= 1024 {
             return String(format: "%.1fM", value / 1024)
         }
-        return String(format: "%.0fK", value)
+        return String(format: "%.1fK", value)
     }
 
     private func temperatureText(_ value: Double?) -> String {
