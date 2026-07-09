@@ -43,6 +43,7 @@ final class SystemMonitorPlugin: BasePlugin {
     let settings: SystemMonitorSettings
 
     private let service: SystemMonitorService
+    private let debugEnabled = ProcessInfo.processInfo.environment["BKIT_SMC_DEBUG"] == "1"
 
     init() {
         settings = SystemMonitorSettings()
@@ -91,6 +92,7 @@ final class SystemMonitorPlugin: BasePlugin {
 
     /// 启动系统监控采集服务，并持续刷新快照数据。
     override func start() {
+        debugLog("plugin start")
         service.start()
         updateStatus(.running)
     }
@@ -99,5 +101,11 @@ final class SystemMonitorPlugin: BasePlugin {
     override func stop() {
         service.stop()
         updateStatus(.stopped)
+    }
+
+    /// 调试模式下输出插件启动信息，确认插件已被注册并进入运行态。
+    private func debugLog(_ message: String) {
+        guard debugEnabled else { return }
+        print("[SystemMonitorPlugin] \(message)")
     }
 }

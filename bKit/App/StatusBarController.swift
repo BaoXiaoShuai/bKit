@@ -47,7 +47,7 @@ final class StatusBarController: NSObject {
     private func setupStatusItem() {
         guard let button = statusItem.button else { return }
 
-        button.image = NSImage(systemSymbolName: "shippingbox", accessibilityDescription: "bKit")
+        button.image = statusBarIconImage()
         button.imagePosition = .imageLeading
         button.toolTip = "bKit"
         button.target = self
@@ -116,9 +116,21 @@ final class StatusBarController: NSObject {
         statusItem.length = title.isEmpty ? NSStatusItem.squareLength : NSStatusItem.variableLength
         guard let button = statusItem.button else { return }
 
+        button.image = statusBarIconImage()
         button.title = title
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.toolTip = statusBarTooltip(title: title)
+    }
+
+    /// 读取应用 logo 作为状态栏图标，资源缺失时回退到系统图标。
+    private func statusBarIconImage() -> NSImage? {
+        if let image = NSImage(named: "BrandLogo") {
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = false
+            return image
+        }
+
+        return NSImage(systemSymbolName: "shippingbox", accessibilityDescription: "bKit")
     }
 
     /// 组装状态栏标题片段，返回结果为空时只展示应用图标。

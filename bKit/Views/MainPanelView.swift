@@ -37,6 +37,13 @@ struct MainPanelView: View {
 
     private var headerView: some View {
         HStack(spacing: 12) {
+            Image("BrandLogo")
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
             VStack(alignment: .leading, spacing: 2) {
                 Text("bKit")
                     .font(.system(size: 17, weight: .semibold))
@@ -105,6 +112,38 @@ struct MainPanelView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 12) {
                     compactMonitorCard(
+                        title: "CPU 占用",
+                        value: percentText(systemMonitorPlugin.snapshot.cpuUsagePercent),
+                        tint: Color(red: 0.91, green: 0.55, blue: 0.28)
+                    )
+
+                    compactMonitorCard(
+                        title: "内存占用",
+                        value: percentText(systemMonitorPlugin.snapshot.memoryUsagePercent),
+                        tint: Color(red: 0.34, green: 0.54, blue: 0.86)
+                    )
+                }
+
+                HStack(spacing: 12) {
+                    compactMonitorCard(
+                        title: "磁盘占用",
+                        value: percentText(systemMonitorPlugin.snapshot.diskUsagePercent),
+                        tint: Color(red: 0.28, green: 0.63, blue: 0.54)
+                    )
+
+                    compactMonitorCard(
+                        title: "实时网速",
+                        value: speedPairText(
+                            upload: systemMonitorPlugin.snapshot.uploadSpeedKBps,
+                            download: systemMonitorPlugin.snapshot.downloadSpeedKBps
+                        ),
+                        tint: Color(red: 0.10, green: 0.78, blue: 0.56),
+                        showsTrend: false
+                    )
+                }
+
+                HStack(spacing: 12) {
+                    compactMonitorCard(
                         title: "CPU 温度",
                         value: temperatureText(systemMonitorPlugin.snapshot.temperatureCelsius),
                         tint: Color(red: 0.91, green: 0.55, blue: 0.28),
@@ -117,13 +156,6 @@ struct MainPanelView: View {
                         tint: .secondary,
                         showsTrend: false
                     )
-
-                    compactMonitorCard(
-                        title: "磁盘占用",
-                        value: percentText(systemMonitorPlugin.snapshot.diskUsagePercent),
-                        tint: Color(red: 0.28, green: 0.63, blue: 0.54),
-                        showsTrend: false
-                    )
                 }
 
                 systemMonitorSummaryPanel
@@ -134,6 +166,24 @@ struct MainPanelView: View {
 
     private var systemMonitorSummaryPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+
+                Text("CPU \(percentText(systemMonitorPlugin.snapshot.cpuUsagePercent))")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("内存 \(numberText(systemMonitorPlugin.snapshot.memoryUsedGB)) / \(numberText(systemMonitorPlugin.snapshot.memoryTotalGB)) GB")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "internaldrive")
                     .font(.system(size: 16, weight: .medium))
@@ -480,6 +530,17 @@ struct MainPanelView: View {
             return String(format: "%.1f MB/s", value / 1024)
         }
         return String(format: "%.1f KB/s", value)
+    }
+
+    private func speedPairText(upload: Double, download: Double) -> String {
+        "↑\(compactSpeedText(upload)) ↓\(compactSpeedText(download))"
+    }
+
+    private func compactSpeedText(_ value: Double) -> String {
+        if value >= 1024 {
+            return String(format: "%.1fM", value / 1024)
+        }
+        return String(format: "%.0fK", value)
     }
 
     private func temperatureText(_ value: Double?) -> String {
