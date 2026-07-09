@@ -109,137 +109,211 @@ struct MainPanelView: View {
         VStack(alignment: .leading, spacing: 14) {
             moduleHeader(title: "系统监控")
 
-            VStack(spacing: 8) {
-                HStack(spacing: 12) {
-                    compactMonitorCard(
-                        title: "CPU 占用",
-                        value: percentText(systemMonitorPlugin.snapshot.cpuUsagePercent),
+            VStack(spacing: 10) {
+                // 一行四个圆形进度卡片
+                HStack(spacing: 8) {
+                    // CPU 占用卡片
+                    circleMonitorCard(
+                        title: "CPU",
+                        progress: systemMonitorPlugin.snapshot.cpuUsagePercent / 100,
+                        centerText: "\(Int(systemMonitorPlugin.snapshot.cpuUsagePercent.rounded()))%",
+                        usedText: percentText(systemMonitorPlugin.snapshot.cpuUsagePercent),
+                        totalText: "100%",
                         tint: Color(red: 0.91, green: 0.55, blue: 0.28)
                     )
-
-                    compactMonitorCard(
-                        title: "内存占用",
-                        value: percentText(systemMonitorPlugin.snapshot.memoryUsagePercent),
+                    // 内存占用卡片
+                    circleMonitorCard(
+                        title: "内存",
+                        progress: systemMonitorPlugin.snapshot.memoryTotalGB > 0
+                            ? systemMonitorPlugin.snapshot.memoryUsedGB / systemMonitorPlugin.snapshot.memoryTotalGB
+                            : 0,
+                        centerText: "\(numberText(systemMonitorPlugin.snapshot.memoryUsedGB))G",
+                        usedText: "\(numberText(systemMonitorPlugin.snapshot.memoryUsedGB)) GB",
+                        totalText: "\(numberText(systemMonitorPlugin.snapshot.memoryTotalGB)) GB",
                         tint: Color(red: 0.34, green: 0.54, blue: 0.86)
                     )
-                }
-
-                HStack(spacing: 12) {
-                    compactMonitorCard(
-                        title: "磁盘占用",
-                        value: percentText(systemMonitorPlugin.snapshot.diskUsagePercent),
+                    // 磁盘占用卡片
+                    circleMonitorCard(
+                        title: "磁盘",
+                        progress: systemMonitorPlugin.snapshot.diskTotalGB > 0
+                            ? systemMonitorPlugin.snapshot.diskUsedGB / systemMonitorPlugin.snapshot.diskTotalGB
+                            : 0,
+                        centerText: "\(Int(systemMonitorPlugin.snapshot.diskUsagePercent.rounded()))%",
+                        usedText: "\(numberText(systemMonitorPlugin.snapshot.diskUsedGB)) GB",
+                        totalText: "\(numberText(systemMonitorPlugin.snapshot.diskTotalGB)) GB",
                         tint: Color(red: 0.28, green: 0.63, blue: 0.54)
                     )
-
-                    compactMonitorCard(
-                        title: "实时网速",
-                        value: speedPairText(
-                            upload: systemMonitorPlugin.snapshot.uploadSpeedKBps,
-                            download: systemMonitorPlugin.snapshot.downloadSpeedKBps
-                        ),
-                        tint: Color(red: 0.10, green: 0.78, blue: 0.56),
-                        showsTrend: false
+                    // 温度卡片，以 100°C 为满值
+                    circleMonitorCard(
+                        title: "温度",
+                        progress: min(1.0, (systemMonitorPlugin.snapshot.temperatureCelsius ?? 0) / 100.0),
+                        centerText: systemMonitorPlugin.snapshot.temperatureCelsius
+                            .map { "\(Int($0.rounded()))°" } ?? "--",
+                        usedText: temperatureText(systemMonitorPlugin.snapshot.temperatureCelsius),
+                        totalText: "100 °C",
+                        tint: Color(red: 0.86, green: 0.38, blue: 0.34)
                     )
                 }
 
-                HStack(spacing: 12) {
-                    compactMonitorCard(
-                        title: "CPU 温度",
-                        value: temperatureText(systemMonitorPlugin.snapshot.temperatureCelsius),
-                        tint: Color(red: 0.91, green: 0.55, blue: 0.28),
-                        showsTrend: false
-                    )
-
-                    compactMonitorCard(
-                        title: "风扇转速",
-                        value: fanSpeedText(systemMonitorPlugin.snapshot.fanSpeedRPM),
-                        tint: .secondary,
-                        showsTrend: false
-                    )
-                }
-
-                systemMonitorSummaryPanel
+                // 实时网速 + 风扇转速 一行两个卡片
+                systemMonitorBottomRow
             }
         }
         .padding(.vertical, 16)
     }
 
-    private var systemMonitorSummaryPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "cpu")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22)
-
-                Text("CPU \(percentText(systemMonitorPlugin.snapshot.cpuUsagePercent))")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text("内存 \(numberText(systemMonitorPlugin.snapshot.memoryUsedGB)) / \(numberText(systemMonitorPlugin.snapshot.memoryTotalGB)) GB")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "internaldrive")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22)
-
-                Text("可用 \(numberText(max(0, systemMonitorPlugin.snapshot.diskTotalGB - systemMonitorPlugin.snapshot.diskUsedGB))) GB / 共 \(numberText(systemMonitorPlugin.snapshot.diskTotalGB)) GB")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-            }
-
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "globe")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22)
-
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(speedText(systemMonitorPlugin.snapshot.uploadSpeedKBps))
-                            .font(.system(size: 13, weight: .medium))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(Color(red: 0.19, green: 0.47, blue: 0.92))
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(speedText(systemMonitorPlugin.snapshot.downloadSpeedKBps))
-                            .font(.system(size: 13, weight: .medium))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(Color(red: 0.10, green: 0.78, blue: 0.56))
-                }
-
-                Spacer()
-            }
-
-            NetworkTrendPanel(
-                uploadSamples: systemMonitorPlugin.snapshot.uploadHistoryKBps,
-                downloadSamples: systemMonitorPlugin.snapshot.downloadHistoryKBps
-            )
-                .frame(height: 96)
+    /// 实时网速 + 风扇转速 信息卡片行。
+    private var systemMonitorBottomRow: some View {
+        HStack(spacing: 8) {
+            // 实时网速卡片
+            miniNetCard
+            // 风扇转速卡片
+            miniFanCard
         }
-        .padding(.horizontal, 12)
+    }
+
+    /// 圆形进度卡片：标题和数值均内嵌于圆璯中。
+    private func circleMonitorCard(
+        title: String,
+        // 进度 0.0-1.0
+        progress: Double,
+        // 圆心显示的简短数值文字
+        centerText: String,
+        // 已用数值
+        usedText: String,
+        // 总量数值
+        totalText: String,
+        tint: Color
+    ) -> some View {
+        VStack(spacing: 0) {
+            // 圆形进度，标题和数值均显示在圆内
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: max(0, min(1, progress)))
+                    .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeOut(duration: 0.55), value: progress)
+
+                VStack(spacing: 2) {
+                    // 圆内标题（小字次要信息）
+                    Text(title)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    // 圆内主数值
+                    Text(centerText)
+                        .font(.system(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(width: 66, height: 66)
+
+            // 已用 / 总量，与圆形有间距
+            VStack(spacing: 3) {
+                Text(usedText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Text(totalText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .padding(.top, 10)
+        }
         .padding(.vertical, 10)
+        .padding(.horizontal, 2)
+        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.white.opacity(0.14))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 0.8)
+        )
+    }
+
+    /// 实时网速微型卡片：上行 + 下行双色展示。
+    private var miniNetCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "globe")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("实时网速")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(compactSpeedText(systemMonitorPlugin.snapshot.uploadSpeedKBps))
+                            .font(.system(size: 13, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(Color(red: 0.19, green: 0.47, blue: 0.92))
+
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(compactSpeedText(systemMonitorPlugin.snapshot.downloadSpeedKBps))
+                            .font(.system(size: 13, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(Color(red: 0.28, green: 0.63, blue: 0.54))
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.14))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 0.8)
+        )
+    }
+
+    /// 风扇转速微型卡片：展示当前转速。
+    private var miniFanCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "fan")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("风扇转速")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.secondary)
+                Text(fanSpeedText(systemMonitorPlugin.snapshot.fanSpeedRPM))
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.14))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 0.8)
         )
     }
@@ -362,9 +436,14 @@ struct MainPanelView: View {
                 .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(.secondary)
 
+            // 剩余 < 10% 时显示红色警示
+            let isLow = progress > 0.9
+            let warningColor = Color(red: 0.92, green: 0.28, blue: 0.28)
+
             Text(value)
                 .font(.system(size: 26, weight: .semibold))
                 .monospacedDigit()
+                .foregroundStyle(isLow ? warningColor : .primary)
 
             Text(detail)
                 .font(.system(size: 12, weight: .regular))
@@ -377,7 +456,7 @@ struct MainPanelView: View {
                 .overlay(alignment: .leading) {
                     GeometryReader { proxy in
                         Capsule()
-                            .fill(tint)
+                            .fill(isLow ? warningColor : tint)
                             .frame(width: proxy.size.width * progress, height: 3)
                     }
                 }
@@ -399,8 +478,7 @@ struct MainPanelView: View {
     private func compactMonitorCard(
         title: String,
         value: String,
-        tint: Color,
-        showsTrend: Bool = true
+        tint: Color
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -412,15 +490,10 @@ struct MainPanelView: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-
-            if showsTrend {
-                TrendPlaceholderLine(tint: tint)
-                    .frame(height: 14)
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, minHeight: showsTrend ? 74 : 58, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.white.opacity(0.14))
@@ -559,230 +632,3 @@ struct MainPanelView: View {
 
 }
 
-/// 系统监控趋势线占位，后续真实数据接入后可直接替换点位。
-private struct TrendPlaceholderLine: View {
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            Path { path in
-                let width = proxy.size.width
-                let height = proxy.size.height
-
-                path.move(to: CGPoint(x: 0, y: height * 0.72))
-                path.addLine(to: CGPoint(x: width * 0.18, y: height * 0.66))
-                path.addLine(to: CGPoint(x: width * 0.33, y: height * 0.70))
-                path.addLine(to: CGPoint(x: width * 0.51, y: height * 0.48))
-                path.addLine(to: CGPoint(x: width * 0.68, y: height * 0.56))
-                path.addLine(to: CGPoint(x: width * 0.84, y: height * 0.34))
-                path.addLine(to: CGPoint(x: width, y: height * 0.40))
-            }
-            .stroke(tint.opacity(0.92), style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-        }
-    }
-}
-
-/// 网络测速趋势占位图，后续真实采样接入后可直接替换点位序列。
-private struct NetworkTrendPanel: View {
-    let uploadSamples: [Double]
-    let downloadSamples: [Double]
-
-    var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let height = proxy.size.height
-            let dividerY = height * 0.5
-
-            ZStack {
-                Divider()
-                    .overlay(Color.primary.opacity(0.035))
-                    .offset(y: dividerY - height / 2)
-
-                NetworkHalfAreaShape(
-                    samples: uploadSamples,
-                    range: 0...(dividerY - 6),
-                    direction: .up
-                )
-                .fill(Color(red: 0.19, green: 0.47, blue: 0.92).opacity(0.14))
-
-                SmoothNetworkLineShape(
-                    samples: uploadSamples,
-                    range: 0...(dividerY - 6),
-                    direction: .up
-                )
-                .stroke(Color(red: 0.19, green: 0.47, blue: 0.92), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-
-                NetworkHalfAreaShape(
-                    samples: downloadSamples,
-                    range: (dividerY + 6)...height,
-                    direction: .down
-                )
-                .fill(Color(red: 0.10, green: 0.78, blue: 0.56).opacity(0.14))
-
-                SmoothNetworkLineShape(
-                    samples: downloadSamples,
-                    range: (dividerY + 6)...height,
-                    direction: .down
-                )
-                .stroke(Color(red: 0.10, green: 0.78, blue: 0.56), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-            }
-            .animation(.easeInOut(duration: 0.95), value: uploadSamples)
-            .animation(.easeInOut(duration: 0.95), value: downloadSamples)
-        }
-    }
-}
-
-private enum NetworkTrendDirection {
-    case up
-    case down
-}
-
-private struct NetworkHalfLineShape: Shape {
-    let samples: [Double]
-    let range: ClosedRange<CGFloat>
-    let direction: NetworkTrendDirection
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let points = makePoints(in: rect)
-        guard let first = points.first else { return path }
-        path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
-        }
-        return path
-    }
-
-    private func makePoints(in rect: CGRect) -> [CGPoint] {
-        let values = samples.isEmpty ? [0] : samples
-        let maxValue = max(values.max() ?? 0, 1)
-        let width = rect.width
-        let height = range.upperBound - range.lowerBound
-        let step = values.count > 1 ? width / CGFloat(values.count - 1) : 0
-
-        return values.enumerated().map { index, value in
-            let normalized = CGFloat(value / maxValue)
-            let x = CGFloat(index) * step
-            let y: CGFloat
-
-            switch direction {
-            case .up:
-                y = range.upperBound - (normalized * height)
-            case .down:
-                y = range.lowerBound + (normalized * height)
-            }
-
-            return CGPoint(x: x, y: y)
-        }
-    }
-}
-
-private struct SmoothNetworkLineShape: Shape {
-    let samples: [Double]
-    let range: ClosedRange<CGFloat>
-    let direction: NetworkTrendDirection
-
-    func path(in rect: CGRect) -> Path {
-        let points = makePoints(in: rect)
-        var path = Path()
-        guard let first = points.first else { return path }
-
-        path.move(to: first)
-
-        guard points.count > 1 else {
-            return path
-        }
-
-        for index in 1..<points.count {
-            let previous = points[index - 1]
-            let current = points[index]
-            let midpoint = CGPoint(
-                x: (previous.x + current.x) / 2,
-                y: (previous.y + current.y) / 2
-            )
-            path.addQuadCurve(to: midpoint, control: previous)
-        }
-
-        if let last = points.last {
-            path.addQuadCurve(to: last, control: last)
-        }
-
-        return path
-    }
-
-    private func makePoints(in rect: CGRect) -> [CGPoint] {
-        let values = samples.isEmpty ? [0] : samples
-        let maxValue = max(values.max() ?? 0, 1)
-        let width = rect.width
-        let height = range.upperBound - range.lowerBound
-        let step = values.count > 1 ? width / CGFloat(values.count - 1) : 0
-
-        return values.enumerated().map { index, value in
-            let normalized = CGFloat(value / maxValue)
-            let x = CGFloat(index) * step
-            let y: CGFloat
-
-            switch direction {
-            case .up:
-                y = range.upperBound - (normalized * height)
-            case .down:
-                y = range.lowerBound + (normalized * height)
-            }
-
-            return CGPoint(x: x, y: y)
-        }
-    }
-}
-
-private struct NetworkHalfAreaShape: Shape {
-    let samples: [Double]
-    let range: ClosedRange<CGFloat>
-    let direction: NetworkTrendDirection
-
-    func path(in rect: CGRect) -> Path {
-        let line = NetworkHalfLineShape(samples: samples, range: range, direction: direction)
-        let points = linePathPoints(in: rect)
-        var path = Path()
-        guard let first = points.first, let last = points.last else { return path }
-
-        path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
-        }
-
-        switch direction {
-        case .up:
-            path.addLine(to: CGPoint(x: last.x, y: range.upperBound))
-            path.addLine(to: CGPoint(x: first.x, y: range.upperBound))
-        case .down:
-            path.addLine(to: CGPoint(x: last.x, y: range.lowerBound))
-            path.addLine(to: CGPoint(x: first.x, y: range.lowerBound))
-        }
-
-        path.closeSubpath()
-        return path
-    }
-
-    private func linePathPoints(in rect: CGRect) -> [CGPoint] {
-        let values = samples.isEmpty ? [0] : samples
-        let maxValue = max(values.max() ?? 0, 1)
-        let width = rect.width
-        let height = range.upperBound - range.lowerBound
-        let step = values.count > 1 ? width / CGFloat(values.count - 1) : 0
-
-        return values.enumerated().map { index, value in
-            let normalized = CGFloat(value / maxValue)
-            let x = CGFloat(index) * step
-            let y: CGFloat
-
-            switch direction {
-            case .up:
-                y = range.upperBound - (normalized * height)
-            case .down:
-                y = range.lowerBound + (normalized * height)
-            }
-
-            return CGPoint(x: x, y: y)
-        }
-    }
-}
